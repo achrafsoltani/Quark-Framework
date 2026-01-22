@@ -1,4 +1,17 @@
 // Package middleware provides built-in middleware for the Quark framework.
+//
+// This package includes commonly-used HTTP middleware:
+//   - CORS: Cross-Origin Resource Sharing support
+//   - Logger: Request/response logging
+//   - Recovery: Panic recovery with stack traces
+//   - Auth: Token-based authentication
+//
+// Example usage:
+//
+//	app := quark.New()
+//	app.Use(middleware.Recovery())
+//	app.Use(middleware.Logger())
+//	app.Use(middleware.CORS(middleware.DefaultCORSConfig))
 package middleware
 
 import (
@@ -10,6 +23,24 @@ import (
 )
 
 // CORSConfig defines the configuration for CORS middleware.
+// CORS (Cross-Origin Resource Sharing) allows web applications running at one
+// origin to access resources from a different origin.
+//
+// Example configurations:
+//
+//	// Allow all origins (default):
+//	app.Use(middleware.CORS(middleware.DefaultCORSConfig))
+//
+//	// Allow specific origins:
+//	app.Use(middleware.CORS(middleware.AllowOrigins(
+//	    "https://example.com",
+//	    "https://app.example.com",
+//	)))
+//
+//	// Allow specific origins with credentials:
+//	app.Use(middleware.CORS(middleware.AllowOriginsWithCredentials(
+//	    "https://example.com",
+//	)))
 type CORSConfig struct {
 	// AllowOrigins is a list of origins that may access the resource.
 	// Use "*" to allow any origin, or specify explicit origins.
