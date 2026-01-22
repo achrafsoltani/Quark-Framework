@@ -1,5 +1,36 @@
 // Package jwt provides JWT (JSON Web Token) utilities using only the standard library.
 // It implements HS256 (HMAC-SHA256) signing without external dependencies.
+//
+// Basic usage:
+//
+//	// Create JWT handler
+//	secret := []byte("your-secret-key")
+//	jwtHandler := jwt.NewWithSecret(secret)
+//
+//	// Generate a token
+//	claims := jwt.NewClaims()
+//	claims.Subject = "user123"
+//	claims.Set("role", "admin")
+//	token, err := jwtHandler.Generate(claims)
+//
+//	// Parse and validate a token
+//	parsedToken, err := jwtHandler.Parse(token)
+//	if err != nil {
+//	    // Invalid or expired token
+//	}
+//	userID := parsedToken.Claims.Subject
+//	role := parsedToken.Claims.GetString("role")
+//
+// Integration with Quark middleware:
+//
+//	jwtHandler := jwt.NewWithSecret([]byte("secret"))
+//	app.Use(jwt.Middleware(jwtHandler))
+//
+//	app.GET("/protected", func(c *quark.Context) error {
+//	    claims := c.Get("claims").(jwt.Claims)
+//	    userID := claims.Subject
+//	    return c.JSON(200, quark.M{"user_id": userID})
+//	})
 package jwt
 
 import (

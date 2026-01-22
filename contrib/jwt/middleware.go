@@ -6,7 +6,32 @@ import (
 	"github.com/AchrafSoltani/quark"
 )
 
-// MiddlewareConfig defines the configuration for JWT middleware.
+// MiddlewareConfig defines the configuration for JWT authentication middleware.
+//
+// The middleware extracts JWT tokens from requests, validates them, and stores
+// the parsed token and claims in the request context for use in handlers.
+//
+// Example usage:
+//
+//	jwtHandler := jwt.NewWithSecret([]byte("secret"))
+//
+//	// Basic usage with defaults
+//	app.Use(jwt.Middleware(jwtHandler))
+//
+//	// Custom configuration
+//	config := jwt.DefaultMiddlewareConfig(jwtHandler)
+//	config.TokenLookup = "query:token"  // Look for token in query params
+//	config.ErrorHandler = func(c *quark.Context, err error) error {
+//	    return c.Unauthorized("Invalid token")
+//	}
+//	app.Use(jwt.MiddlewareWithConfig(config))
+//
+//	// In your handler
+//	app.GET("/profile", func(c *quark.Context) error {
+//	    claims := c.Get("claims").(jwt.Claims)
+//	    userID := claims.Subject
+//	    return c.JSON(200, quark.M{"user_id": userID})
+//	})
 type MiddlewareConfig struct {
 	// JWT is the JWT handler to use for parsing tokens.
 	JWT *JWT

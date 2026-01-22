@@ -1,5 +1,44 @@
 // Package template provides HTML template utilities for the Quark framework.
-// It wraps html/template with common patterns for web development.
+// It wraps html/template with common patterns for web development, including
+// template reloading for development, embedded filesystem support, and a rich
+// set of built-in template functions.
+//
+// Basic usage:
+//
+//	// Create template engine
+//	config := template.DefaultConfig()
+//	config.Dir = "views"
+//	config.Reload = true  // Enable reload in development
+//	engine, err := template.New(config)
+//
+//	// Render in handler
+//	app.GET("/", func(c *quark.Context) error {
+//	    data := quark.M{
+//	        "title": "Home",
+//	        "user":  user,
+//	    }
+//	    return engine.HTML(c, 200, "home", data)
+//	})
+//
+// With embedded templates:
+//
+//	//go:embed templates/*
+//	var templatesFS embed.FS
+//
+//	config := template.DefaultConfig()
+//	config.Extension = ".html"
+//	engine, err := template.NewFromFS(templatesFS, config)
+//
+// Available template functions:
+//   - safeHTML, safeURL, safeAttr, safeJS, safeCSS: Safe output functions
+//   - lower, upper, title, trim, replace, contains, etc.: String manipulation
+//   - eq, ne: Comparison operators
+//   - add, sub, mul, div, mod: Arithmetic operators
+//   - default: Default value if empty
+//   - classIf: Conditional CSS class
+//   - plural: Pluralization helper
+//   - truncate: Text truncation
+//   - dict, list: Data structure helpers
 package template
 
 import (
