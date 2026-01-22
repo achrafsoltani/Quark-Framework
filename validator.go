@@ -1,3 +1,28 @@
+// Package quark provides struct validation through field tags.
+//
+// The validation system supports a wide range of validators including:
+// - Presence validation (required)
+// - Length and size validation (min, max, len)
+// - Format validation (email, url, uuid, pattern)
+// - Character set validation (alpha, alphanum, numeric)
+// - Comparison validation (gt, gte, lt, lte)
+// - Enumeration validation (oneof)
+//
+// Validation is performed recursively on nested structs,
+// allowing for complex validation scenarios.
+//
+// Usage:
+//
+//	type User struct {
+//	    Name  string `validate:"required,min:2,max:50"`
+//	    Email string `validate:"required,email"`
+//	    Age   int    `validate:"gte:0,lte:150"`
+//	}
+//
+//	user := User{Name: "Jo", Email: "invalid", Age: -1}
+//	if errs := quark.Validate(user); errs.HasErrors() {
+//	    return c.ErrorWithDetails(400, "Validation failed", errs.ToMap())
+//	}
 package quark
 
 import (
@@ -10,12 +35,14 @@ import (
 	"unicode"
 )
 
-// ValidationError represents a single validation error.
+// ValidationError represents a single validation error for a field.
+// It includes the field name, the validation tag that failed, the expected
+// value/constraint, and a human-readable error message.
 type ValidationError struct {
-	Field   string `json:"field"`
-	Tag     string `json:"tag"`
-	Value   string `json:"value,omitempty"`
-	Message string `json:"message"`
+	Field   string `json:"field"`            // Field name (uses json tag if available)
+	Tag     string `json:"tag"`              // Validator tag that failed (e.g., "required", "email")
+	Value   string `json:"value,omitempty"`  // Expected value or constraint
+	Message string `json:"message"`          // Human-readable error message
 }
 
 // Error implements the error interface.
@@ -24,9 +51,12 @@ func (e ValidationError) Error() string {
 }
 
 // ValidationErrors is a collection of validation errors.
+// It implements the error interface and provides helper methods for
+// convenient error handling in HTTP responses.
 type ValidationErrors []ValidationError
 
-// Error implements the error interface.
+// Error implements the error interface, joining all error messages with semicolons.
+// Returns an empty string if there are no errors.
 func (e ValidationErrors) Error() string {
 	if len(e) == 0 {
 		return ""
@@ -38,7 +68,14 @@ func (e ValidationErrors) Error() string {
 	return strings.Join(msgs, "; ")
 }
 
-// ToMap converts validation errors to a map for JSON response.
+// ToMap converts validation errors to a map[field]message for convenient JSON responses.
+// Useful for client-side form validation integration.
+//
+// Example:
+//
+//	if errs := quark.Validate(input); errs.HasErrors() {
+//	    return c.ErrorWithDetails(400, "Validation failed", errs.ToMap())
+//	}
 func (e ValidationErrors) ToMap() map[string]string {
 	result := make(map[string]string)
 	for _, err := range e {
@@ -47,31 +84,60 @@ func (e ValidationErrors) ToMap() map[string]string {
 	return result
 }
 
-// HasErrors returns true if there are validation errors.
+// HasErrors returns true if there are any validation errors in the collection.
 func (e ValidationErrors) HasErrors() bool {
 	return len(e) > 0
 }
 
-// Validate validates a struct using struct tags.
-// Supported tags:
-//   - required: field must not be empty
-//   - min:n: minimum length for strings, minimum value for numbers
-//   - max:n: maximum length for strings, maximum value for numbers
-//   - email: must be a valid email address
-//   - url: must be a valid URL
-//   - alpha: must contain only letters
-//   - alphanum: must contain only letters and numbers
-//   - numeric: must contain only numbers
-//   - uuid: must be a valid UUID
-//   - oneof:a,b,c: must be one of the listed values
-//   - pattern:regex: must match the regex pattern
+// Validate validates a struct using validate struct field tags.
+//
+// It performs validation on all exported fields that have a validate tag.
+// Fields without a validate tag or with validate:"-" are skipped (but nested
+// structs are still validated recursively). Field names in errors use the
+// json tag if available, falling back to the struct field name.
+//
+// Validation is performed recursively on nested structs, with field names
+// prefixed by the parent field (e.g., "user.address.street").
+//
+// Supported validation tags:
+//   - required:       field must not be empty/zero
+//   - min:n:          minimum length (strings/slices/maps) or value (numbers)
+//   - max:n:          maximum length (strings/slices/maps) or value (numbers)
+//   - len:n:          exact length (strings/slices/maps)
+//   - gt:n:           greater than n (numbers only)
+//   - gte:n:          greater than or equal to n (numbers only)
+//   - lt:n:           less than n (numbers only)
+//   - lte:n:          less than or equal to n (numbers only)
+//   - email:          must be a valid email address (RFC 5322)
+//   - url:            must be a valid URL (http/https/ftp)
+//   - alpha:          must contain only letters (unicode)
+//   - alphanum:       must contain only letters and numbers
+//   - numeric:        must contain only digits
+//   - uuid:           must be a valid UUID (v4 format)
+//   - oneof:a b c:    must be one of the space-separated values
+//   - pattern:regex:  must match the regex pattern
+//
+// Tags can be combined with commas, e.g., validate:"required,min:2,max:50"
 //
 // Example:
 //
+//	type Address struct {
+//	    Street string `json:"street" validate:"required,min:5"`
+//	    City   string `json:"city" validate:"required"`
+//	}
+//
 //	type User struct {
-//	    Name  string `validate:"required,min:2,max:50"`
-//	    Email string `validate:"required,email"`
-//	    Age   int    `validate:"min:0,max:150"`
+//	    Name    string  `json:"name" validate:"required,min:2,max:50"`
+//	    Email   string  `json:"email" validate:"required,email"`
+//	    Age     int     `json:"age" validate:"gte:0,lte:150"`
+//	    Role    string  `json:"role" validate:"oneof:admin user guest"`
+//	    Address Address `json:"address"`  // Automatically validated recursively
+//	}
+//
+//	user := User{Name: "Jo", Email: "invalid", Age: -1}
+//	if errs := Validate(user); errs.HasErrors() {
+//	    // Returns errors for: name (min:2), email (invalid format), age (gte:0)
+//	    return c.ErrorWithDetails(400, "Validation failed", errs.ToMap())
 //	}
 func Validate(v interface{}) ValidationErrors {
 	val := reflect.ValueOf(v)
@@ -136,9 +202,12 @@ func Validate(v interface{}) ValidationErrors {
 			}
 		}
 
-		// Recursively validate nested structs (always, regardless of tag)
+		// Recursively validate nested structs (always, regardless of whether
+		// the parent field has a validate tag). This ensures complete validation
+		// of complex nested structures.
 		if fieldVal.Kind() == reflect.Struct {
 			nestedErrors := Validate(fieldVal.Interface())
+			// Prefix nested field names with parent field name for clarity
 			for _, err := range nestedErrors {
 				err.Field = fieldName + "." + err.Field
 				errors = append(errors, err)
@@ -149,7 +218,10 @@ func Validate(v interface{}) ValidationErrors {
 	return errors
 }
 
-// applyValidator applies a single validator to a field.
+// applyValidator applies a single named validator to a field value.
+// It dispatches to the appropriate validation function based on the validator name.
+// Returns nil if validation passes or if the validator is unknown.
+// Unknown validators are silently skipped to allow for future extensibility.
 func applyValidator(fieldName string, fieldVal reflect.Value, name, param string) *ValidationError {
 	switch name {
 	case "required":
@@ -618,7 +690,16 @@ func validateLte(fieldName string, val reflect.Value, param string) *ValidationE
 	return nil
 }
 
-// isEmpty checks if a value is empty.
+// isEmpty checks if a reflected value is considered "empty" for validation purposes.
+// The definition of empty varies by type:
+//   - String: empty string ""
+//   - Array/Slice/Map: zero length
+//   - Bool: false
+//   - Numbers (int/uint/float): zero value
+//   - Ptr/Interface: nil
+//   - Other types: deep equal to zero value
+//
+// This is used by the "required" validator to determine if a field has a value.
 func isEmpty(val reflect.Value) bool {
 	switch val.Kind() {
 	case reflect.String:
@@ -640,7 +721,23 @@ func isEmpty(val reflect.Value) bool {
 	}
 }
 
-// ValidateVar validates a single variable against a tag string.
+// ValidateVar validates a single variable against a validation tag string.
+// This is useful for validating individual values outside of struct context.
+// The field name in errors will be "value".
+//
+// Example:
+//
+//	email := "invalid-email"
+//	if errs := quark.ValidateVar(email, "required,email"); errs.HasErrors() {
+//	    // Returns: value must be a valid email address
+//	    return c.BadRequest(errs.Error())
+//	}
+//
+//	age := 200
+//	if errs := quark.ValidateVar(age, "gte:0,lte:150"); errs.HasErrors() {
+//	    // Returns: value must be at most 150
+//	    return c.BadRequest(errs.Error())
+//	}
 func ValidateVar(value interface{}, tag string) ValidationErrors {
 	val := reflect.ValueOf(value)
 	validators := strings.Split(tag, ",")
