@@ -99,12 +99,6 @@ func Validate(v interface{}) ValidationErrors {
 			continue
 		}
 
-		// Get validate tag
-		tag := field.Tag.Get("validate")
-		if tag == "" || tag == "-" {
-			continue
-		}
-
 		// Get field name (use json tag if available)
 		fieldName := field.Name
 		if jsonTag := field.Tag.Get("json"); jsonTag != "" {
@@ -114,30 +108,35 @@ func Validate(v interface{}) ValidationErrors {
 			}
 		}
 
-		// Parse and apply validators
-		validators := strings.Split(tag, ",")
-		for _, validator := range validators {
-			validator = strings.TrimSpace(validator)
-			if validator == "" {
-				continue
-			}
+		// Get validate tag
+		tag := field.Tag.Get("validate")
 
-			// Parse validator and parameter
-			var name, param string
-			if idx := strings.Index(validator, ":"); idx != -1 {
-				name = validator[:idx]
-				param = validator[idx+1:]
-			} else {
-				name = validator
-			}
+		// Apply validators if tag exists and is not "-"
+		if tag != "" && tag != "-" {
+			validators := strings.Split(tag, ",")
+			for _, validator := range validators {
+				validator = strings.TrimSpace(validator)
+				if validator == "" {
+					continue
+				}
 
-			// Apply validator
-			if err := applyValidator(fieldName, fieldVal, name, param); err != nil {
-				errors = append(errors, *err)
+				// Parse validator and parameter
+				var name, param string
+				if idx := strings.Index(validator, ":"); idx != -1 {
+					name = validator[:idx]
+					param = validator[idx+1:]
+				} else {
+					name = validator
+				}
+
+				// Apply validator
+				if err := applyValidator(fieldName, fieldVal, name, param); err != nil {
+					errors = append(errors, *err)
+				}
 			}
 		}
 
-		// Recursively validate nested structs
+		// Recursively validate nested structs (always, regardless of tag)
 		if fieldVal.Kind() == reflect.Struct {
 			nestedErrors := Validate(fieldVal.Interface())
 			for _, err := range nestedErrors {

@@ -50,28 +50,40 @@ func (c *Container) Get(name string) (interface{}, error) {
 	}
 	c.mu.RUnlock()
 
-	// Check if factory exists
+	// Check if factory exists and get it
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	// Double-check after acquiring write lock
 	if instance, ok := c.instances[name]; ok {
+		c.mu.Unlock()
 		return instance, nil
 	}
 
 	factory, ok := c.factories[name]
 	if !ok {
+		c.mu.Unlock()
 		return nil, fmt.Errorf("service not found: %s", name)
 	}
 
-	// Create instance
+	// Release lock before calling factory to prevent deadlock
+	// when factory calls Get() for dependencies
+	c.mu.Unlock()
+
+	// Create instance (without holding lock)
 	instance, err := factory(c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service %s: %w", name, err)
 	}
 
-	// Cache the instance
+	// Re-acquire lock to cache the instance
+	c.mu.Lock()
+	// Check if another goroutine created it while we were waiting
+	if existing, ok := c.instances[name]; ok {
+		c.mu.Unlock()
+		return existing, nil
+	}
 	c.instances[name] = instance
+	c.mu.Unlock()
 
 	return instance, nil
 }
