@@ -34,3 +34,4 @@ quark-php-master/
 
 # Temporary files
 commits.sh
+*.local.md
